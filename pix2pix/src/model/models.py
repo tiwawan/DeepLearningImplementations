@@ -140,6 +140,59 @@ def generator_unet_upsampling(img_dim, bn_mode, model_name="generator_unet_upsam
     return generator_unet
 
 
+def generator_unet_upsampling_fixdepth(img_dim, bn_mode, min_s, model_name="generator_unet_upsampling"):
+
+    nb_filters = 64
+
+    if K.image_dim_ordering() == "channels_first":
+        bn_axis = 1
+        nb_channels = img_dim[0]
+    else:
+        bn_axis = -1
+        nb_channels = img_dim[-1]
+
+    unet_input = Input(shape=img_dim, name="unet_input")
+
+    # Prepare encoder filters
+    nb_conv = int(np.floor(np.log(min_s) / np.log(2)))
+    list_nb_filters = [nb_filters * min(8, (2 ** i)) for i in range(nb_conv)]
+
+    # Encoder
+    list_encoder = [Conv2D(list_nb_filters[0], (3, 3),
+                           strides=(2, 2), name="unet_conv2D_1", padding="same")(unet_input)]
+    for i, f in enumerate(list_nb_filters[1:]):
+        name = "unet_conv2D_%s" % (i + 2)
+        conv = conv_block_unet(list_encoder[-1], f, name, bn_mode, bn_axis)
+        list_encoder.append(conv)
+
+    # Prepare decoder filters
+    list_nb_filters = list_nb_filters[:-2][::-1]
+    if len(list_nb_filters) < nb_conv - 1:
+        list_nb_filters.append(nb_filters)
+
+    # Decoder
+    list_decoder = [up_conv_block_unet(list_encoder[-1], list_encoder[-2],
+                                       list_nb_filters[0], "unet_upconv2D_1", bn_mode, bn_axis, dropout=True)]
+    for i, f in enumerate(list_nb_filters[1:]):
+        name = "unet_upconv2D_%s" % (i + 2)
+        # Dropout only on first few layers
+        if i < 2:
+            d = True
+        else:
+            d = False
+        conv = up_conv_block_unet(list_decoder[-1], list_encoder[-(i + 3)], f, name, bn_mode, bn_axis, dropout=d)
+        list_decoder.append(conv)
+
+    x = Activation("relu")(list_decoder[-1])
+    x = UpSampling2D(size=(2, 2))(x)
+    x = Conv2D(nb_channels, (3, 3), name="last_conv", padding="same")(x)
+    x = Activation("tanh")(x)
+
+    generator_unet = Model(inputs=[unet_input], outputs=[x])
+
+    return generator_unet
+
+
 def generator_unet_deconv(img_dim, bn_mode, batch_size, model_name="generator_unet_deconv"):
 
     assert K.backend() == "tensorflow", "Not implemented with theano backend"

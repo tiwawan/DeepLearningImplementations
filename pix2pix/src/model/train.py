@@ -58,7 +58,7 @@ def train(**kwargs):
         opt_dcgan = Adam(lr=1E-3, beta_1=0.9, beta_2=0.999, epsilon=1e-08)
         # opt_discriminator = SGD(lr=1E-3, momentum=0.9, nesterov=True)
         opt_discriminator = Adam(lr=1E-3, beta_1=0.9, beta_2=0.999, epsilon=1e-08)
-
+        """
         # Load generator model
         generator_model = models.load("generator_unet_%s" % generator,
                                       img_dim,
@@ -66,6 +66,9 @@ def train(**kwargs):
                                       bn_mode,
                                       use_mbd,
                                       batch_size)
+        """
+        generator_model = models.generator_unet_upsampling_fixdepth((None, None, 3), 
+                                    bn_mode, 256, model_name="generator_unet_upsampling")
         # Load discriminator model
         discriminator_model = models.load("DCGAN_discriminator",
                                           img_dim_disc,
